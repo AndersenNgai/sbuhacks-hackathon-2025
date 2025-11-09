@@ -153,6 +153,20 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         }
     }
 
+    fun addToMenu(mealEntry: MealEntry) {
+        viewModelScope.launch {
+            repository.addToMenu(mealEntry)
+            userMessage.value = "Item added to menu"
+        }
+    }
+
+    fun addToMenu(mealEntries: List<MealEntry>) {
+        viewModelScope.launch {
+            repository.addToMenu(mealEntries)
+            userMessage.value = "${mealEntries.size} item(s) added to menu"
+        }
+    }
+
     fun deleteMeal(mealId: Long) {
         viewModelScope.launch {
             repository.deleteMeal(mealId)

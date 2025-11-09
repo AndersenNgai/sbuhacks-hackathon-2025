@@ -49,6 +49,8 @@ interface NutritionRepository {
     suspend fun fetchMenuFromWeb(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<MealEntry>>
     suspend fun fetchCategories(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<FoodCategory>>
     fun getLocations(): Flow<List<Location>>
+    suspend fun addToMenu(mealEntry: MealEntry) // Add item to menu (for manual entry from screenshots)
+    suspend fun addToMenu(mealEntries: List<MealEntry>) // Add multiple items to menu
     
     // NeuralSeek meal planning
     suspend fun getMealPlanSuggestions(days: Int = 7, preferences: String = ""): Result<String>
@@ -135,6 +137,13 @@ class DataStoreNutritionRepository(
                         _menuItems.value = savedMenu
                     }
                 }
+                // If menu is empty, automatically load screenshot items
+                if (_menuItems.value.isEmpty()) {
+                    loadScreenshotMenuItems()
+                }
+            } ?: run {
+                // No saved menu, load screenshot items
+                loadScreenshotMenuItems()
             }
         }
     }
@@ -203,6 +212,26 @@ class DataStoreNutritionRepository(
     override fun getMenu(): Flow<List<MealEntry>> {
         // Return the stored menu items (populated by fetchMenuFromWeb)
         return _menuItems
+    }
+
+    override suspend fun addToMenu(mealEntry: MealEntry) {
+        addToMenu(listOf(mealEntry))
+    }
+
+    override suspend fun addToMenu(mealEntries: List<MealEntry>) {
+        withContext(ioDispatcher) {
+            val updatedMenu = _menuItems.value + mealEntries.map { 
+                it.copy(id = System.nanoTime()) // Ensure unique IDs
+            }
+            _menuItems.value = updatedMenu
+            // Persist to DataStore
+            dataStore.edit { prefs ->
+                prefs[Keys.Menu] = json.encodeToString(
+                    ListSerializer(MealEntry.serializer()),
+                    updatedMenu
+                )
+            }
+        }
     }
 
     override suspend fun fetchMenuFromWeb(url: String): Result<List<MealEntry>> {
@@ -321,7 +350,8 @@ class DataStoreNutritionRepository(
     }
 
     /**
-     * Loads menu items extracted from screenshots
+     * Loads menu items extracted from screenshots and adds them to the menu
+     * This adds items to the existing menu (doesn't replace it)
      * Call this to populate the menu with screenshot data
      */
     override suspend fun loadScreenshotMenuItems(): Result<List<MealEntry>> {
@@ -329,16 +359,17 @@ class DataStoreNutritionRepository(
             try {
                 val items = ScreenshotDataProcessor.extractedMenuItems
                 if (items.isNotEmpty()) {
-                    // Add to menu
-                    _menuItems.value = items
-                    // Save to DataStore
-                    dataStore.edit { prefs ->
-                        prefs[Keys.Menu] = json.encodeToString(
-                            ListSerializer(MealEntry.serializer()),
-                            items
-                        )
+                    // Add to menu (don't replace, just add new items)
+                    // Filter out items that already exist (by name) to avoid duplicates
+                    val existingNames = _menuItems.value.map { it.name.lowercase() }.toSet()
+                    val newItems = items.filter { it.name.lowercase() !in existingNames }
+                    
+                    if (newItems.isNotEmpty()) {
+                        addToMenu(newItems)
+                        Result.success(newItems)
+                    } else {
+                        Result.success(emptyList()) // All items already in menu
                     }
-                    Result.success(items)
                 } else {
                     Result.failure(Exception("No screenshot data available"))
                 }

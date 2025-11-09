@@ -467,7 +467,7 @@ fun ManualDataEntryScreen(
                 onDismiss()
             },
             title = { Text("Success!") },
-            text = { Text("Menu item saved successfully!") },
+            text = { Text("Menu item added to menu! You can now find it in 'All Locations' and add it to your tracker.") },
             confirmButton = {
                 TextButton(onClick = { 
                     showSuccessDialog = false

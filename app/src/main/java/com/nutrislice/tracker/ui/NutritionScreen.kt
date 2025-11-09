@@ -441,7 +441,7 @@ fun NutritionScreen(
                     }
                     "Manual Entry" -> {
                         ManualDataEntryScreen(
-                            onSaveMeal = { meal -> onAddMeals(listOf(meal)) },
+                            onSaveMeal = { meal -> viewModel.addToMenu(meal) }, // Save to menu instead of meals
                             onDismiss = { selectedScreen = "All Locations" }
                         )
                     }
