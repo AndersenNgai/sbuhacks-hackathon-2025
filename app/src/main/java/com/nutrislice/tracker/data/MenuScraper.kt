@@ -32,7 +32,12 @@ class MenuScraper {
                 // Fetch the HTML content
                 val request = Request.Builder()
                     .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.5")
+                    .header("Accept-Encoding", "gzip, deflate, br")
+                    .header("Connection", "keep-alive")
+                    .header("Upgrade-Insecure-Requests", "1")
                     .build()
 
                 val response = client.newCall(request).execute()
@@ -46,6 +51,18 @@ class MenuScraper {
                     Exception("Empty response body")
                 )
 
+                // Try to extract JSON data from script tags (Nutrislice often uses JSON)
+                val jsonData = extractJsonData(html)
+                if (jsonData != null) {
+                    return@withContext jsonData
+                }
+
+                // Try to find Nutrislice API endpoints or embedded data
+                val apiData = extractNutrisliceApiData(html)
+                if (apiData != null) {
+                    return@withContext apiData
+                }
+
                 // Parse the HTML
                 val doc = Jsoup.parse(html)
 
@@ -53,16 +70,77 @@ class MenuScraper {
                 val categories = extractCategories(doc)
                 val items = extractMenuItems(doc, categories)
 
+                // If still no items, try more aggressive extraction
+                val finalItems = if (items.isEmpty()) {
+                    extractMenuItemsAggressive(doc)
+                } else {
+                    items
+                }
+
                 Result.success(
                     ScrapedMenuData(
-                        categories = categories,
-                        items = items
+                        categories = categories.ifEmpty { extractCategoriesAggressive(doc) },
+                        items = finalItems
                     )
                 )
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(Exception("Scraping error: ${e.message}", e))
             }
         }
+    }
+
+    /**
+     * Tries to extract JSON data from script tags
+     */
+    private fun extractJsonData(html: String): Result<ScrapedMenuData>? {
+        try {
+            // Look for JSON data in script tags
+            val scriptPattern = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
+            val matches = scriptPattern.findAll(html)
+            
+            for (match in matches) {
+                val scriptContent = match.groupValues[1]
+                // Look for menu data patterns
+                if (scriptContent.contains("menu") || scriptContent.contains("items") || scriptContent.contains("stations")) {
+                    // Try to find JSON objects
+                    val jsonPattern = Regex("""\{[^{}]*"name"[^{}]*\}""")
+                    val jsonMatches = jsonPattern.findAll(scriptContent)
+                    if (jsonMatches.any()) {
+                        // Found potential JSON data
+                        // For now, return null to continue with HTML parsing
+                        // This can be enhanced to parse actual JSON
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Continue with HTML parsing
+        }
+        return null
+    }
+
+    /**
+     * Tries to extract data from Nutrislice API endpoints or embedded data
+     */
+    private fun extractNutrisliceApiData(html: String): Result<ScrapedMenuData>? {
+        try {
+            // Look for API endpoints in the HTML
+            val apiPattern = Regex("""https?://[^"'\s]+nutrislice[^"'\s]+api[^"'\s]+""")
+            val apiMatches = apiPattern.findAll(html)
+            
+            // Look for embedded JSON data
+            val jsonDataPattern = Regex("""window\.__INITIAL_STATE__\s*=\s*(\{.*?\});""", RegexOption.DOT_MATCHES_ALL)
+            val jsonMatch = jsonDataPattern.find(html)
+            
+            // Look for data attributes with menu info
+            val dataPattern = Regex("""data-menu-items\s*=\s*["']([^"']+)["']""")
+            val dataMatch = dataPattern.find(html)
+            
+            // For now, return null - we'll rely on HTML parsing
+            // In the future, we could make API calls to the endpoints found
+        } catch (e: Exception) {
+            // Continue with HTML parsing
+        }
+        return null
     }
 
     /**
@@ -131,13 +209,22 @@ class MenuScraper {
         val items = mutableListOf<ScrapedMenuItem>()
         var itemIndex = 0
 
-        // Try multiple selectors for menu items
+        // Try multiple selectors for menu items - expanded list
         val itemSelectors = listOf(
             ".menu-item",
             ".menu-item-name",
             "[data-menu-item]",
             ".food-item",
-            ".item-name"
+            ".item-name",
+            "[data-item-name]",
+            ".dish-name",
+            ".food-name",
+            "h3.menu-item-title",
+            "h4.menu-item-title",
+            ".ns-menu-item",
+            ".nutrislice-menu-item",
+            "[class*='menu-item']",
+            "[class*='food-item']"
         )
 
         for (selector in itemSelectors) {
@@ -145,11 +232,13 @@ class MenuScraper {
             if (elements.isNotEmpty()) {
                 elements.forEach { element ->
                     val item = extractMenuItemFromElement(element, itemIndex++, categories)
-                    if (item != null) {
+                    if (item != null && item.name.length > 2) { // Filter out very short names
                         items.add(item)
                     }
                 }
-                break // Use the first selector that finds elements
+                if (items.isNotEmpty()) {
+                    break // Use the first selector that finds elements
+                }
             }
         }
 
@@ -157,18 +246,24 @@ class MenuScraper {
         if (items.isEmpty() && categories.isNotEmpty()) {
             categories.forEach { category ->
                 // Find elements that might be items under this category
-                doc.select("h2, h3, .menu-category-name").forEach { header ->
-                    if (header.text().contains(category.name, ignoreCase = true)) {
+                doc.select("h2, h3, h4, .menu-category-name, [class*='station'], [class*='category']").forEach { header ->
+                    val headerText = header.text().trim()
+                    if (headerText.isNotBlank() && (headerText.contains(category.name, ignoreCase = true) || category.name.contains(headerText, ignoreCase = true))) {
                         // Look for items in the same section
                         var current = header.nextElementSibling()
                         var itemCount = 0
-                        while (current != null && itemCount < 20) {
-                            val itemName = current.select("h3, h4, .item-name, .menu-item-name").firstOrNull()?.text()
-                            if (itemName != null && itemName.isNotBlank()) {
+                        var depth = 0
+                        while (current != null && itemCount < 50 && depth < 10) {
+                            // Try to find item name in various ways
+                            val itemName = current.select("h3, h4, h5, .item-name, .menu-item-name, [class*='item'], [class*='dish']")
+                                .firstOrNull()?.text()?.trim()
+                                ?: current.text().trim().takeIf { it.length in 3..100 && !it.contains("\n") && it.split(" ").size <= 5 }
+                            
+                            if (itemName != null && itemName.isNotBlank() && itemName.length > 2) {
                                 items.add(
                                     ScrapedMenuItem(
                                         id = "item_${itemIndex++}",
-                                        name = itemName.trim(),
+                                        name = itemName,
                                         category = category.name,
                                         station = category.station
                                     )
@@ -176,6 +271,7 @@ class MenuScraper {
                                 itemCount++
                             }
                             current = current.nextElementSibling()
+                            depth++
                         }
                     }
                 }
@@ -183,6 +279,117 @@ class MenuScraper {
         }
 
         return items.distinctBy { "${it.name}_${it.category}" }
+    }
+
+    /**
+     * More aggressive extraction when standard methods fail
+     */
+    private fun extractMenuItemsAggressive(doc: Document): List<ScrapedMenuItem> {
+        val items = mutableListOf<ScrapedMenuItem>()
+        var itemIndex = 0
+
+        // First, try to find elements with data attributes (Nutrislice might use these)
+        doc.select("[data-name], [data-item-name], [data-dish-name]").forEach { element ->
+            val name = element.attr("data-name").ifBlank {
+                element.attr("data-item-name").ifBlank {
+                    element.attr("data-dish-name")
+                }
+            }
+            if (name.isNotBlank() && name.length > 2) {
+                items.add(
+                    ScrapedMenuItem(
+                        id = "item_${itemIndex++}",
+                        name = name.trim(),
+                        category = "Uncategorized",
+                        station = "Unknown"
+                    )
+                )
+            }
+        }
+
+        // If still no items, look for text in cards/containers
+        if (items.isEmpty()) {
+            // Look for common container patterns
+            doc.select(".card, .item-card, .menu-card, [class*='card'], [class*='item']").forEach { card ->
+                val text = card.text().trim()
+                // Extract first line or first meaningful text
+                val firstLine = text.split("\n", ".", ",").firstOrNull()?.trim()
+                if (firstLine != null && firstLine.length in 3..50 && firstLine.split(" ").size <= 5) {
+                    if (items.none { it.name.equals(firstLine, ignoreCase = true) }) {
+                        items.add(
+                            ScrapedMenuItem(
+                                id = "item_${itemIndex++}",
+                                name = firstLine,
+                                category = "Uncategorized",
+                                station = "Unknown"
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // Last resort: look for any meaningful text
+        if (items.isEmpty()) {
+            doc.select("div, li, span").forEach { element ->
+                val text = element.text().trim()
+                if (text.length in 3..50 && 
+                    text.split(" ").size <= 5 &&
+                    !text.contains(":") &&
+                    !text.contains("@") &&
+                    !text.matches(Regex(".*\\d{4}.*")) &&
+                    element.select("a, button").isEmpty() &&
+                    !text.lowercase().contains("click") &&
+                    !text.lowercase().contains("menu") &&
+                    !text.lowercase().contains("view")
+                ) {
+                    val looksLikeFood = text.split(" ").any { word ->
+                        word.length > 2 && word[0].isUpperCase()
+                    }
+                    
+                    if (looksLikeFood && items.none { it.name.equals(text, ignoreCase = true) }) {
+                        items.add(
+                            ScrapedMenuItem(
+                                id = "item_${itemIndex++}",
+                                name = text,
+                                category = "Uncategorized",
+                                station = "Unknown"
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        return items.distinctBy { it.name.lowercase() }.take(100) // Limit to 100 items
+    }
+
+    /**
+     * More aggressive category extraction
+     */
+    private fun extractCategoriesAggressive(doc: Document): List<FoodCategory> {
+        val categories = mutableListOf<FoodCategory>()
+        var categoryIndex = 0
+
+        // Look for headers that might be categories
+        doc.select("h1, h2, h3, h4").forEach { header ->
+            val text = header.text().trim()
+            if (text.length in 3..50 && 
+                text.split(" ").size <= 5 &&
+                !text.contains(":") &&
+                !text.matches(Regex(".*\\d{4}.*"))
+            ) {
+                categories.add(
+                    FoodCategory(
+                        id = "category_${categoryIndex++}",
+                        name = text,
+                        station = text
+                    )
+                )
+            }
+        }
+
+        return categories.distinctBy { it.name.lowercase() }
     }
 
     /**

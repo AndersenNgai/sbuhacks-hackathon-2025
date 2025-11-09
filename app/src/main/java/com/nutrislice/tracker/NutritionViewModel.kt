@@ -172,10 +172,14 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
             userMessage.value = null
             
             repository.fetchMenuFromWeb(url).onSuccess { menuItems ->
-                userMessage.value = "Fetched ${menuItems.size} menu items"
-                // Optionally add fetched items to the menu or save them
+                if (menuItems.isEmpty()) {
+                    userMessage.value = "No menu items found. The website may use JavaScript to load content. Try checking the website structure."
+                } else {
+                    userMessage.value = "Fetched ${menuItems.size} menu items"
+                }
             }.onFailure { error ->
-                userMessage.value = "Error fetching menu: ${error.message}"
+                val errorMsg = error.message ?: "Unknown error"
+                userMessage.value = "Error: $errorMsg. The website may require JavaScript or have changed its structure."
             }
             
             isFetchingMenu.value = false
