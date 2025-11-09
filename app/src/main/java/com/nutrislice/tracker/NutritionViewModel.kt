@@ -24,7 +24,8 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
 
     data class NutritionUiState(
         val goals: NutritionGoals = NutritionGoals(),
-        val meals: List<MealEntry> = emptyList(),
+        val meals: List<MealEntry> = emptyList(), // Today's meals
+        val allMeals: List<MealEntry> = emptyList(), // All saved meals (for history)
         val streak: Int = 0,
         val menu: List<MealEntry> = emptyList(),
         val categories: List<FoodCategory> = emptyList(),
@@ -80,6 +81,7 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         NutritionUiState(
             goals = goals,
             meals = todaysMeals,
+            allMeals = allMeals, // Include all meals for history view
             streak = streak,
             menu = menu,
             categories = cats,

@@ -14,16 +14,31 @@ NeuralSeek is an AI-powered platform that provides contextually relevant respons
 2. Sign up for an account
 3. Complete the registration process
 
-### 2. Generate an API Key
+### 2. Check API Access and Generate an API Key
 
 1. Log in to your NeuralSeek dashboard at [neuralseek.com](https://neuralseek.com)
-2. In the **top navigation bar**, click on **"Integrate"** (this is visible in the main navigation menu)
-3. In the Integrate section, look for API key management options
-4. Click the button to **Create** or **Generate** a new API key
-   - The button might be labeled "Create API Key", "Generate API Key", "New API Key", or similar
-5. **Important:** Copy the API key immediately after generation
+
+2. **Check if API Access is Enabled:**
+   - Navigate to the **"Integrate"** section in the top navigation bar
+   - Look for API-related settings or options
+   - If you see an option to "Enable API Access" or similar, make sure it's turned on
+   - Some accounts may need to contact NeuralSeek support to enable API access
+   - Check your account settings or subscription plan - API access might be a premium feature
+
+3. **Generate an API Key:**
+   - In the **"Integrate"** section, look for API key management options
+   - Click the button to **Create** or **Generate** a new API key
+     - The button might be labeled "Create API Key", "Generate API Key", "New API Key", or similar
+   - If you don't see this option, your account might not have API access enabled
+   
+4. **Important:** Copy the API key immediately after generation
    - Some systems only show the key once for security reasons
    - Store it securely (you'll need it in the next step)
+
+5. **Troubleshooting:**
+   - If you can't find the API key section, your account might not have API access
+   - Contact NeuralSeek support to enable API access for your account
+   - Check if your subscription plan includes API access
 
 ### 3. Configure the API Key in the App
 

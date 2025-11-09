@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
  */
 class NeuralSeekService(
     private val apiKey: String = "d854492c-1b3306ac-ad0f1ac6-3363b14d", // Set your API key here or via dependency injection
-    private val baseUrl: String = "https://api.neuralseek.com/v1/test"
+    private val baseUrl: String = "https://api.neuralseek.com/v1/test",
+    private val instance: String? = null // Optional: instance identifier if needed
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -38,7 +39,9 @@ class NeuralSeekService(
 
     @Serializable
     data class NeuralSeekRequest(
-        val question: String
+        val question: String,
+        val apikey: String? = null, // Some APIs require apikey in body
+        val instance: String? = null // Some APIs require instance identifier
     )
 
     @Serializable
@@ -66,21 +69,28 @@ class NeuralSeekService(
                 }
 
                 val question = buildMealPlanningQuestion(goals, userProfile, days, preferences)
+                // Don't include apikey in body - only use headers (based on error message)
                 val requestBody = json.encodeToString(
                     NeuralSeekRequest.serializer(),
-                    NeuralSeekRequest(question = question)
+                    NeuralSeekRequest(
+                        question = question,
+                        apikey = null, // Don't include in body - causes "Invalid apikey" error
+                        instance = instance
+                    )
                 )
 
+                // Use only header authentication (not in body)
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("APIkey", apiKey) // NeuralSeek uses "APIkey" as the header name
+                    .header("APIkey", apiKey) // Primary header method
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
 
                 Log.d("NeuralSeek", "Request URL: $baseUrl/seek")
                 Log.d("NeuralSeek", "API Key (first 10 chars): ${apiKey.take(10)}...")
+                Log.d("NeuralSeek", "Request body: $requestBody")
                 Log.d("NeuralSeek", "Sending request: $question")
                 val response = client.newCall(request).execute()
 
@@ -113,9 +123,21 @@ class NeuralSeekService(
                     // Provide helpful error messages
                     val errorMessage = when (response.code) {
                         401 -> {
-                            "Authentication failed. Please check your NeuralSeek API key. " +
-                            "Make sure the API key is correct and hasn't expired. " +
-                            "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                            val errorText = errorBody ?: ""
+                            if (errorText.contains("Invalid apikey") || errorText.contains("Invalid apikey, otp, or embedCode")) {
+                                "❌ Invalid API key for this NeuralSeek instance.\n\n" +
+                                "The API key '${apiKey.take(10)}...' is not valid for your instance.\n\n" +
+                                "🔧 Solution:\n" +
+                                "1. Go to neuralseek.com → Integrate section\n" +
+                                "2. Generate a NEW API key\n" +
+                                "3. Copy it immediately (you can only see it once)\n" +
+                                "4. Update the API key in NeuralSeekService.kt (line 26)\n\n" +
+                                "⚠️ Make sure you're using the API key from the SAME NeuralSeek instance/account."
+                            } else {
+                                "Authentication failed. Please check your NeuralSeek API key. " +
+                                "Make sure the API key is correct and hasn't expired. " +
+                                "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                            }
                         }
                         403 -> "API key doesn't have permission to access this endpoint."
                         404 -> "API endpoint not found. Please check the API URL."
@@ -153,21 +175,28 @@ class NeuralSeekService(
                 }
 
                 val question = buildMealTimeQuestion(mealTime, goals, userProfile, preferences)
+                // Don't include apikey in body - only use headers (based on error message)
                 val requestBody = json.encodeToString(
                     NeuralSeekRequest.serializer(),
-                    NeuralSeekRequest(question = question)
+                    NeuralSeekRequest(
+                        question = question,
+                        apikey = null, // Don't include in body - causes "Invalid apikey" error
+                        instance = instance
+                    )
                 )
 
+                // Use only header authentication (not in body)
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("APIkey", apiKey) // NeuralSeek uses "APIkey" as the header name
+                    .header("APIkey", apiKey) // Primary header method
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
 
                 Log.d("NeuralSeek", "Request URL: $baseUrl/seek")
                 Log.d("NeuralSeek", "API Key (first 10 chars): ${apiKey.take(10)}...")
+                Log.d("NeuralSeek", "Request body: $requestBody")
                 val response = client.newCall(request).execute()
 
                 if (response.isSuccessful) {
@@ -193,9 +222,21 @@ class NeuralSeekService(
                     // Provide helpful error messages
                     val errorMessage = when (response.code) {
                         401 -> {
-                            "Authentication failed. Please check your NeuralSeek API key. " +
-                            "Make sure the API key is correct and hasn't expired. " +
-                            "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                            val errorText = errorBody ?: ""
+                            if (errorText.contains("Invalid apikey") || errorText.contains("Invalid apikey, otp, or embedCode")) {
+                                "❌ Invalid API key for this NeuralSeek instance.\n\n" +
+                                "The API key '${apiKey.take(10)}...' is not valid for your instance.\n\n" +
+                                "🔧 Solution:\n" +
+                                "1. Go to neuralseek.com → Integrate section\n" +
+                                "2. Generate a NEW API key\n" +
+                                "3. Copy it immediately (you can only see it once)\n" +
+                                "4. Update the API key in NeuralSeekService.kt (line 26)\n\n" +
+                                "⚠️ Make sure you're using the API key from the SAME NeuralSeek instance/account."
+                            } else {
+                                "Authentication failed. Please check your NeuralSeek API key. " +
+                                "Make sure the API key is correct and hasn't expired. " +
+                                "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                            }
                         }
                         403 -> "API key doesn't have permission to access this endpoint."
                         404 -> "API endpoint not found. Please check the API URL."

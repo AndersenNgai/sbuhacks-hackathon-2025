@@ -186,6 +186,18 @@ fun NutritionScreen(
                         selectedStationName = null
                     }
                 )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.SetMeal, contentDescription = null) },
+                    label = { Text("Meal History") },
+                    selected = selectedScreen == "Meal History",
+                    onClick = { 
+                        scope.launch { drawerState.close() }
+                        selectedScreen = "Meal History"
+                        selectedLocationName = null
+                        selectedMealTime = null
+                        selectedStationName = null
+                    }
+                )
                  NavigationDrawerItem(
                     icon = { Icon(Icons.Outlined.Person, contentDescription = null) },
                     label = { Text("Profile") },
@@ -317,6 +329,7 @@ fun NutritionScreen(
             Column(modifier = Modifier.padding(innerPadding)) {
                 when (selectedScreen) {
                     "Tracker" -> TrackerScreen(uiState = uiState, onDeleteMeal = onDeleteMeal)
+                    "Meal History" -> MealHistoryScreen(uiState = uiState, onDeleteMeal = onDeleteMeal)
                     "All Locations" -> {
                         if (selectedLocation == null) {
                             LocationGrid(
@@ -1184,6 +1197,161 @@ private fun EmptyMealState() {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun MealHistoryScreen(
+    uiState: NutritionViewModel.NutritionUiState,
+    onDeleteMeal: (Long) -> Unit
+) {
+    // Group meals by date
+    val mealsByDate = uiState.allMeals
+        .sortedByDescending { it.timestamp }
+        .groupBy { 
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = it.timestamp }
+            String.format("%04d-%02d-%02d", calendar.get(java.util.Calendar.YEAR), 
+                calendar.get(java.util.Calendar.MONTH) + 1, 
+                calendar.get(java.util.Calendar.DAY_OF_MONTH))
+        }
+    
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Meal History",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${uiState.allMeals.size} total meals",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        }
+        
+        if (mealsByDate.isEmpty()) {
+            item {
+                EmptyMealState()
+            }
+        } else {
+            mealsByDate.forEach { (date, meals) ->
+                item {
+                    // Date header
+                    Text(
+                        text = formatDate(date),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                
+                // Meals for this date
+                items(meals) { meal ->
+                    MealRowWithDate(meal = meal, onDeleteMeal = onDeleteMeal)
+                }
+                
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Divider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealRowWithDate(meal: MealEntry, onDeleteMeal: (Long) -> Unit) {
+    val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+    val mealTime = timeFormat.format(java.util.Date(meal.timestamp))
+    
+    Card(
+        shape = RoundedCornerShape(12.dp), 
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        meal.name, 
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        "• $mealTime",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "${meal.calories.toInt()} kcal • ${meal.protein.toInt()}g P • ${meal.carbs.toInt()}g C • ${meal.fat.toInt()}g F • ${meal.fiber.toInt()}g Fiber",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                if (meal.mealTime.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "${meal.mealTime} • ${meal.station}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    )
+                }
+            }
+            IconButton(onClick = { onDeleteMeal(meal.id) }) {
+                Icon(Icons.Outlined.Delete, contentDescription = "Delete meal")
+            }
+        }
+    }
+}
+
+private fun formatDate(dateString: String): String {
+    return try {
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(dateString)
+        val calendar = java.util.Calendar.getInstance()
+        val today = java.util.Calendar.getInstance()
+        val yesterday = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+        
+        if (date != null) {
+            calendar.time = date
+            val formatter = when {
+                calendar.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR) &&
+                calendar.get(java.util.Calendar.DAY_OF_YEAR) == today.get(java.util.Calendar.DAY_OF_YEAR) -> {
+                    "Today"
+                }
+                calendar.get(java.util.Calendar.YEAR) == yesterday.get(java.util.Calendar.YEAR) &&
+                calendar.get(java.util.Calendar.DAY_OF_YEAR) == yesterday.get(java.util.Calendar.DAY_OF_YEAR) -> {
+                    "Yesterday"
+                }
+                else -> {
+                    java.text.SimpleDateFormat("EEEE, MMMM d, yyyy", java.util.Locale.getDefault()).format(date)
+                }
+            }
+            formatter
+        } else {
+            dateString
+        }
+    } catch (e: Exception) {
+        dateString
     }
 }
 
