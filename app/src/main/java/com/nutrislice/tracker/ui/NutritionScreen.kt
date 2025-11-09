@@ -198,6 +198,18 @@ fun NutritionScreen(
                         selectedStationName = null
                     }
                 )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.Fastfood, contentDescription = null) },
+                    label = { Text("Menu Items") },
+                    selected = selectedScreen == "Menu Items",
+                    onClick = { 
+                        scope.launch { drawerState.close() }
+                        selectedScreen = "Menu Items"
+                        selectedLocationName = null
+                        selectedMealTime = null
+                        selectedStationName = null
+                    }
+                )
                  NavigationDrawerItem(
                     icon = { Icon(Icons.Outlined.Person, contentDescription = null) },
                     label = { Text("Profile") },
@@ -330,6 +342,11 @@ fun NutritionScreen(
                 when (selectedScreen) {
                     "Tracker" -> TrackerScreen(uiState = uiState, onDeleteMeal = onDeleteMeal)
                     "Meal History" -> MealHistoryScreen(uiState = uiState, onDeleteMeal = onDeleteMeal)
+                    "Menu Items" -> MenuItemsScreen(
+                        menuItems = uiState.menu,
+                        onAddMeals = onAddMeals,
+                        onMealClicked = { showNutritionFacts = it }
+                    )
                     "All Locations" -> {
                         if (selectedLocation == null) {
                             LocationGrid(
@@ -772,6 +789,96 @@ fun StationCard(station: Category, onStationSelected: (Category) -> Unit) {
                             color = if (imageUrl != null) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MenuItemsScreen(
+    menuItems: List<MealEntry>,
+    onAddMeals: (List<MealEntry>) -> Unit,
+    onMealClicked: (MealEntry) -> Unit
+) {
+    // Group menu items by meal time for easier browsing
+    val itemsByMealTime = menuItems.groupBy { it.mealTime.ifBlank { "Other" } }
+        .toList()
+        .sortedBy { it.first }
+    
+    if (menuItems.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Fastfood,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "No menu items available",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Add items from screenshots or fetch menu from web",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Menu Items",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${menuItems.size} items",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            
+            itemsByMealTime.forEach { (mealTime, items) ->
+                item {
+                    Text(
+                        text = mealTime,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                
+                items(items) { meal ->
+                    MenuItem(meal = meal, onMealClicked = onMealClicked)
+                }
+                
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Divider()
                 }
             }
         }
