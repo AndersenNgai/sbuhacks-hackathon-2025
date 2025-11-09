@@ -32,12 +32,20 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         val userProfile: UserProfile = UserProfile(),
         val isLoading: Boolean = true,
         val isFetchingMenu: Boolean = false,
-        val userMessage: String? = null
+        val userMessage: String? = null,
+        val mealPlanSuggestion: String? = null,
+        val isGeneratingMealPlan: Boolean = false,
+        val mealTimeSuggestion: String? = null,
+        val isGeneratingMealTimeSuggestion: Boolean = false
     )
 
     private val userMessage = MutableStateFlow<String?>(null)
     private val isFetchingMenu = MutableStateFlow(false)
     private val categories = MutableStateFlow<List<FoodCategory>>(emptyList())
+    private val mealPlanSuggestion = MutableStateFlow<String?>(null)
+    private val isGeneratingMealPlan = MutableStateFlow(false)
+    private val mealTimeSuggestion = MutableStateFlow<String?>(null)
+    private val isGeneratingMealTimeSuggestion = MutableStateFlow(false)
 
     val uiState: StateFlow<NutritionUiState> = combine(
         repository.goals,
@@ -48,7 +56,11 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         repository.userProfile,
         userMessage,
         isFetchingMenu,
-        categories
+        categories,
+        mealPlanSuggestion,
+        isGeneratingMealPlan,
+        mealTimeSuggestion,
+        isGeneratingMealTimeSuggestion
     ) { flows ->
         val goals = flows[0] as NutritionGoals
         val allMeals = flows[1] as List<MealEntry>
@@ -59,6 +71,10 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         val message = flows[6] as String?
         val fetching = flows[7] as Boolean
         val cats = flows[8] as List<FoodCategory>
+        val mealPlan = flows[9] as String?
+        val generatingPlan = flows[10] as Boolean
+        val mealTime = flows[11] as String?
+        val generatingMealTime = flows[12] as Boolean
 
         val todaysMeals = allMeals.filter { isToday(it.timestamp) }
         NutritionUiState(
@@ -71,7 +87,11 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
             userProfile = userProfile,
             isLoading = false,
             isFetchingMenu = fetching,
-            userMessage = message
+            userMessage = message,
+            mealPlanSuggestion = mealPlan,
+            isGeneratingMealPlan = generatingPlan,
+            mealTimeSuggestion = mealTime,
+            isGeneratingMealTimeSuggestion = generatingMealTime
         )
     }.stateIn(
         scope = viewModelScope,
@@ -203,16 +223,72 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         viewModelScope.launch {
             isFetchingMenu.value = true
             userMessage.value = null
-            
+
             repository.fetchCategories(url).onSuccess { cats ->
                 categories.value = cats
                 userMessage.value = "Fetched ${cats.size} categories"
             }.onFailure { error ->
                 userMessage.value = "Error fetching categories: ${error.message}"
             }
-            
+
             isFetchingMenu.value = false
         }
+    }
+
+    /**
+     * Generates a meal plan suggestion using NeuralSeek
+     */
+    fun generateMealPlan(days: Int = 7, preferences: String = "") {
+        viewModelScope.launch {
+            isGeneratingMealPlan.value = true
+            mealPlanSuggestion.value = null
+            userMessage.value = null
+
+            repository.getMealPlanSuggestions(days, preferences).onSuccess { suggestion ->
+                mealPlanSuggestion.value = suggestion
+                userMessage.value = "Meal plan generated successfully!"
+            }.onFailure { error ->
+                val errorMsg = error.message ?: "Unknown error"
+                userMessage.value = "Error generating meal plan: $errorMsg"
+            }
+
+            isGeneratingMealPlan.value = false
+        }
+    }
+
+    /**
+     * Generates meal suggestions for a specific meal time using NeuralSeek
+     */
+    fun generateMealTimeSuggestion(mealTime: String, preferences: String = "") {
+        viewModelScope.launch {
+            isGeneratingMealTimeSuggestion.value = true
+            mealTimeSuggestion.value = null
+            userMessage.value = null
+
+            repository.getMealTimeSuggestions(mealTime, preferences).onSuccess { suggestion ->
+                mealTimeSuggestion.value = suggestion
+                userMessage.value = "$mealTime suggestions generated!"
+            }.onFailure { error ->
+                val errorMsg = error.message ?: "Unknown error"
+                userMessage.value = "Error generating suggestions: $errorMsg"
+            }
+
+            isGeneratingMealTimeSuggestion.value = false
+        }
+    }
+
+    /**
+     * Clears the current meal plan suggestion
+     */
+    fun clearMealPlanSuggestion() {
+        mealPlanSuggestion.value = null
+    }
+
+    /**
+     * Clears the current meal time suggestion
+     */
+    fun clearMealTimeSuggestion() {
+        mealTimeSuggestion.value = null
     }
 
     private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {

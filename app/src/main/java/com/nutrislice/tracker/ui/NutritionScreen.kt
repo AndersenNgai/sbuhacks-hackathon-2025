@@ -126,7 +126,8 @@ fun NutritionRoute(viewModel: NutritionViewModel) {
         onAddMeals = viewModel::addMeals,
         onDeleteMeal = viewModel::deleteMeal,
         onSaveProfile = viewModel::saveUserProfile,
-        onFetchMenu = viewModel::fetchMenuFromWeb
+        onFetchMenu = viewModel::fetchMenuFromWeb,
+        viewModel = viewModel
     )
 }
 
@@ -138,7 +139,8 @@ fun NutritionScreen(
     onAddMeals: (List<MealEntry>) -> Unit,
     onDeleteMeal: (Long) -> Unit,
     onSaveProfile: (UserProfile) -> Unit,
-    onFetchMenu: () -> Unit
+    onFetchMenu: () -> Unit,
+    viewModel: NutritionViewModel
 ) {
     var showGoalDialog by rememberSaveable { mutableStateOf(false) }
     var goalsDraft by rememberSaveable(uiState.goals, stateSaver = NutritionGoalsSaver) { mutableStateOf(uiState.goals) }
@@ -188,6 +190,18 @@ fun NutritionScreen(
                     onClick = { 
                         scope.launch { drawerState.close() }
                         selectedScreen = "Profile"
+                        selectedLocationName = null
+                        selectedMealTime = null
+                        selectedStationName = null
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.SetMeal, contentDescription = null) },
+                    label = { Text("Meal Planning") },
+                    selected = selectedScreen == "Meal Planning",
+                    onClick = { 
+                        scope.launch { drawerState.close() }
+                        selectedScreen = "Meal Planning"
                         selectedLocationName = null
                         selectedMealTime = null
                         selectedStationName = null
@@ -384,6 +398,15 @@ fun NutritionScreen(
                     }
                     "Profile" -> {
                         ProfileScreen(userProfile = uiState.userProfile, onSaveProfile = onSaveProfile)
+                    }
+                    "Meal Planning" -> {
+                        MealPlanningScreen(
+                            uiState = uiState,
+                            onGenerateMealPlan = viewModel::generateMealPlan,
+                            onGenerateMealTimeSuggestion = viewModel::generateMealTimeSuggestion,
+                            onClearMealPlan = viewModel::clearMealPlanSuggestion,
+                            onClearMealTimeSuggestion = viewModel::clearMealTimeSuggestion
+                        )
                     }
                     "Meal Recommendation" -> {
                         MealRecommendationScreen(uiState = uiState, onAddMeals = onAddMeals, onMealClicked = { showNutritionFacts = it })

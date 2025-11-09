@@ -48,6 +48,10 @@ interface NutritionRepository {
     suspend fun fetchMenuFromWeb(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<MealEntry>>
     suspend fun fetchCategories(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<FoodCategory>>
     fun getLocations(): Flow<List<Location>>
+    
+    // NeuralSeek meal planning
+    suspend fun getMealPlanSuggestions(days: Int = 7, preferences: String = ""): Result<String>
+    suspend fun getMealTimeSuggestions(mealTime: String, preferences: String = ""): Result<String>
 }
 
 class DataStoreNutritionRepository(
@@ -57,7 +61,8 @@ class DataStoreNutritionRepository(
         encodeDefaults = true
     },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val menuScraper: MenuScraper = MenuScraper()
+    private val menuScraper: MenuScraper = MenuScraper(),
+    private val neuralSeekService: NeuralSeekService = NeuralSeekService() // TODO: Pass API key from config
 ) : NutritionRepository {
 
     private object Keys {
@@ -293,6 +298,22 @@ class DataStoreNutritionRepository(
                 Location(name = "Craft", imageUrl = "https://www.stonybrook.edu/commcms/fsa/images/WSD-Retail-4.jpg")
             )
         )
+    }
+
+    override suspend fun getMealPlanSuggestions(days: Int, preferences: String): Result<String> {
+        return withContext(ioDispatcher) {
+            val goals = goals.first()
+            val profile = userProfile.first()
+            neuralSeekService.getMealSuggestions(goals, profile, days, preferences)
+        }
+    }
+
+    override suspend fun getMealTimeSuggestions(mealTime: String, preferences: String): Result<String> {
+        return withContext(ioDispatcher) {
+            val goals = goals.first()
+            val profile = userProfile.first()
+            neuralSeekService.getMealTimeSuggestions(mealTime, goals, profile, preferences)
+        }
     }
 
     private fun mealsFromPrefs(prefs: Preferences): List<MealEntry> {

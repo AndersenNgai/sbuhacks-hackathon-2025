@@ -127,3 +127,28 @@ data class UserProfile(
     val year: String = "",
     val restrictions: Set<DietaryRestriction> = emptySet()
 )
+
+/**
+ * Represents a meal plan suggestion from NeuralSeek
+ */
+@Serializable
+data class MealPlanSuggestion(
+    val id: String = System.currentTimeMillis().toString(),
+    val title: String,
+    val description: String,
+    val days: Int,
+    val generatedAt: Long = System.currentTimeMillis(),
+    val suggestions: String, // The AI-generated meal plan text
+    val mealEntries: List<MealEntry> = emptyList() // Parsed meal entries if available
+)
+
+/**
+ * Represents a single meal suggestion for a specific meal time
+ */
+@Serializable
+data class MealTimeSuggestion(
+    val id: String = System.currentTimeMillis().toString(),
+    val mealTime: String,
+    val suggestions: String, // The AI-generated suggestions text
+    val generatedAt: Long = System.currentTimeMillis()
+)
