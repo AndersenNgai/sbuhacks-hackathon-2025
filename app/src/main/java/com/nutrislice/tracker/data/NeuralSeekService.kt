@@ -74,8 +74,7 @@ class NeuralSeekService(
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("Authorization", "Bearer $apiKey")
-                    .header("apikey", apiKey) // Some APIs use this format
+                    .header("APIkey", apiKey) // NeuralSeek uses "APIkey" as the header name
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
@@ -162,8 +161,7 @@ class NeuralSeekService(
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("Authorization", "Bearer $apiKey")
-                    .header("apikey", apiKey) // Some APIs use this format
+                    .header("APIkey", apiKey) // NeuralSeek uses "APIkey" as the header name
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
