@@ -74,11 +74,14 @@ class NeuralSeekService(
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("apikey", apiKey)
+                    .header("Authorization", "Bearer $apiKey")
+                    .header("apikey", apiKey) // Some APIs use this format
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
 
+                Log.d("NeuralSeek", "Request URL: $baseUrl/seek")
+                Log.d("NeuralSeek", "API Key (first 10 chars): ${apiKey.take(10)}...")
                 Log.d("NeuralSeek", "Sending request: $question")
                 val response = client.newCall(request).execute()
 
@@ -107,9 +110,22 @@ class NeuralSeekService(
                 } else {
                     val errorBody = response.body?.string()
                     Log.e("NeuralSeek", "API error: ${response.code} - $errorBody")
-                    return@withContext Result.failure(
-                        Exception("NeuralSeek API error: ${response.code} - $errorBody")
-                    )
+                    
+                    // Provide helpful error messages
+                    val errorMessage = when (response.code) {
+                        401 -> {
+                            "Authentication failed. Please check your NeuralSeek API key. " +
+                            "Make sure the API key is correct and hasn't expired. " +
+                            "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                        }
+                        403 -> "API key doesn't have permission to access this endpoint."
+                        404 -> "API endpoint not found. Please check the API URL."
+                        429 -> "Too many requests. Please try again later."
+                        500 -> "NeuralSeek server error. Please try again later."
+                        else -> "NeuralSeek API error: ${response.code} - $errorBody"
+                    }
+                    
+                    return@withContext Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
                 Log.e("NeuralSeek", "Error calling NeuralSeek API", e)
@@ -146,11 +162,14 @@ class NeuralSeekService(
                 val request = Request.Builder()
                     .url("$baseUrl/seek")
                     .header("accept", "application/json")
-                    .header("apikey", apiKey)
+                    .header("Authorization", "Bearer $apiKey")
+                    .header("apikey", apiKey) // Some APIs use this format
                     .header("Content-Type", "application/json")
                     .post(requestBody.toRequestBody("application/json".toMediaType()))
                     .build()
 
+                Log.d("NeuralSeek", "Request URL: $baseUrl/seek")
+                Log.d("NeuralSeek", "API Key (first 10 chars): ${apiKey.take(10)}...")
                 val response = client.newCall(request).execute()
 
                 if (response.isSuccessful) {
@@ -171,9 +190,23 @@ class NeuralSeekService(
                     }
                 } else {
                     val errorBody = response.body?.string()
-                    return@withContext Result.failure(
-                        Exception("NeuralSeek API error: ${response.code} - $errorBody")
-                    )
+                    Log.e("NeuralSeek", "API error: ${response.code} - $errorBody")
+                    
+                    // Provide helpful error messages
+                    val errorMessage = when (response.code) {
+                        401 -> {
+                            "Authentication failed. Please check your NeuralSeek API key. " +
+                            "Make sure the API key is correct and hasn't expired. " +
+                            "You can get a new API key from the NeuralSeek dashboard under 'Integrate' section."
+                        }
+                        403 -> "API key doesn't have permission to access this endpoint."
+                        404 -> "API endpoint not found. Please check the API URL."
+                        429 -> "Too many requests. Please try again later."
+                        500 -> "NeuralSeek server error. Please try again later."
+                        else -> "NeuralSeek API error: ${response.code} - $errorBody"
+                    }
+                    
+                    return@withContext Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
                 return@withContext Result.failure(
