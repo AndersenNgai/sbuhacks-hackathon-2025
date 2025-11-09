@@ -172,18 +172,26 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         viewModelScope.launch {
             isFetchingMenu.value = true
             userMessage.value = null
-            
+
             repository.fetchMenuFromWeb(url).onSuccess { menuItems ->
                 if (menuItems.isEmpty()) {
-                    userMessage.value = "No menu items found. The website may use JavaScript to load content. Try checking the website structure."
+                    userMessage.value = "No menu items found. Trying alternative methods..."
+                    // Try fetching categories as a fallback
+                    repository.fetchCategories(url).onSuccess { categories ->
+                        if (categories.isNotEmpty()) {
+                            userMessage.value = "Found ${categories.size} categories but no items. The API may require authentication or use a different format."
+                        } else {
+                            userMessage.value = "Unable to fetch menu data. The website structure may have changed or requires authentication."
+                        }
+                    }
                 } else {
-                    userMessage.value = "Fetched ${menuItems.size} menu items"
+                    userMessage.value = "Successfully fetched ${menuItems.size} menu items"
                 }
             }.onFailure { error ->
                 val errorMsg = error.message ?: "Unknown error"
-                userMessage.value = "Error: $errorMsg. The website may require JavaScript or have changed its structure."
+                userMessage.value = "Error: $errorMsg. Please check your internet connection and try again."
             }
-            
+
             isFetchingMenu.value = false
         }
     }
