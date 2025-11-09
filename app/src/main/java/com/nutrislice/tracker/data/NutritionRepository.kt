@@ -17,11 +17,16 @@ import com.nutrislice.tracker.model.NutritionGoals
 import com.nutrislice.tracker.model.ScrapedMenuItem
 import com.nutrislice.tracker.model.UserProfile
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -61,7 +66,12 @@ class DataStoreNutritionRepository(
         val Streak = intPreferencesKey("streak")
         val LastDay = longPreferencesKey("last_day")
         val UserProfile = stringPreferencesKey("user_profile")
+        val Menu = stringPreferencesKey("scraped_menu")
     }
+
+    // Store fetched menu items in memory
+    private val _menuItems = MutableStateFlow<List<MealEntry>>(emptyList())
+    private val repositoryScope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     override val goals: Flow<NutritionGoals> = dataStore.data
         .catch { emit(emptyPreferences()) }
@@ -102,6 +112,23 @@ class DataStoreNutritionRepository(
                     .getOrNull() ?: UserProfile()
             } ?: UserProfile()
         }
+
+    init {
+        // Load saved menu from DataStore on initialization
+        repositoryScope.launch {
+            dataStore.data.first().let { prefs ->
+                prefs[Keys.Menu]?.let { stored ->
+                    runCatching {
+                        val savedMenu = json.decodeFromString(
+                            ListSerializer(MealEntry.serializer()),
+                            stored
+                        )
+                        _menuItems.value = savedMenu
+                    }
+                }
+            }
+        }
+    }
 
     override suspend fun saveGoals(goals: NutritionGoals) {
         withContext(ioDispatcher) {
@@ -165,17 +192,26 @@ class DataStoreNutritionRepository(
     }
 
     override fun getMenu(): Flow<List<MealEntry>> {
-        // Return cached menu or fetch from web
-        // For now, return empty list - use fetchMenuFromWeb() to get actual data
-        return flowOf(emptyList())
+        // Return the stored menu items (populated by fetchMenuFromWeb)
+        return _menuItems
     }
 
     override suspend fun fetchMenuFromWeb(url: String): Result<List<MealEntry>> {
         return withContext(ioDispatcher) {
             menuScraper.scrapeMenu(url).map { scrapedData ->
-                scrapedData.items.map { scrapedItem ->
+                val menuItems = scrapedData.items.map { scrapedItem ->
                     convertToMealEntry(scrapedItem)
                 }
+                // Store the fetched menu items
+                _menuItems.value = menuItems
+                // Also save to DataStore for persistence
+                dataStore.edit { prefs ->
+                    prefs[Keys.Menu] = json.encodeToString(
+                        ListSerializer(MealEntry.serializer()),
+                        menuItems
+                    )
+                }
+                menuItems
             }
         }
     }

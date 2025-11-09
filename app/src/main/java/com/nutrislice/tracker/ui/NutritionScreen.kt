@@ -123,7 +123,8 @@ fun NutritionRoute(viewModel: NutritionViewModel) {
         onSaveGoals = viewModel::saveGoals,
         onAddMeals = viewModel::addMeals,
         onDeleteMeal = viewModel::deleteMeal,
-        onSaveProfile = viewModel::saveUserProfile
+        onSaveProfile = viewModel::saveUserProfile,
+        onFetchMenu = viewModel::fetchMenuFromWeb
     )
 }
 
@@ -134,7 +135,8 @@ fun NutritionScreen(
     onSaveGoals: (NutritionGoals) -> Unit,
     onAddMeals: (List<MealEntry>) -> Unit,
     onDeleteMeal: (Long) -> Unit,
-    onSaveProfile: (UserProfile) -> Unit
+    onSaveProfile: (UserProfile) -> Unit,
+    onFetchMenu: () -> Unit
 ) {
     var showGoalDialog by rememberSaveable { mutableStateOf(false) }
     var goalsDraft by rememberSaveable(uiState.goals, stateSaver = NutritionGoalsSaver) { mutableStateOf(uiState.goals) }
@@ -269,7 +271,11 @@ fun NutritionScreen(
                     "Tracker" -> TrackerScreen(uiState = uiState, onDeleteMeal = onDeleteMeal)
                     "All Locations" -> {
                         if (selectedLocation == null) {
-                            LocationGrid(uiState = uiState, onLocationSelected = { selectedLocationName = it.name })
+                            LocationGrid(
+                                uiState = uiState, 
+                                onLocationSelected = { selectedLocationName = it.name },
+                                onFetchMenu = onFetchMenu
+                            )
                         } else if (selectedMealTime == null) {
                             val mealTimes = uiState.menu.filter { it.category == selectedLocation.name }.map { it.mealTime }.distinct()
                             MealTimeGrid(mealTimes = mealTimes, onMealTimeSelected = { selectedMealTime = it })
@@ -360,15 +366,45 @@ fun TrackerScreen(
 }
 
 @Composable
-fun LocationGrid(uiState: NutritionViewModel.NutritionUiState, onLocationSelected: (Location) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        items(uiState.locations) { location ->
-            LocationCard(location = location, onLocationSelected = onLocationSelected)
+fun LocationGrid(
+    uiState: NutritionViewModel.NutritionUiState, 
+    onLocationSelected: (Location) -> Unit,
+    onFetchMenu: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Fetch menu button
+        Button(
+            onClick = onFetchMenu,
+            enabled = !uiState.isFetchingMenu,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            if (uiState.isFetchingMenu) {
+                Text("Fetching Menu...")
+            } else {
+                Text("Fetch Menu from Web")
+            }
+        }
+        
+        // Show menu count if available
+        if (uiState.menu.isNotEmpty()) {
+            Text(
+                text = "Menu items: ${uiState.menu.size}",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(uiState.locations) { location ->
+                LocationCard(location = location, onLocationSelected = onLocationSelected)
+            }
         }
     }
 }
