@@ -34,12 +34,14 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SetMeal
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -252,6 +254,23 @@ fun NutritionScreen(
                     },
                     actions = {
                         StreakCounter(streak = uiState.streak)
+                        if (selectedScreen == "All Locations" && selectedLocation == null) {
+                            IconButton(
+                                onClick = onFetchMenu,
+                                enabled = !uiState.isFetchingMenu
+                            ) {
+                                if (uiState.isFetchingMenu) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Outlined.Refresh,
+                                        contentDescription = "Refresh menu"
+                                    )
+                                }
+                            }
+                        }
                         if (selectedScreen == "Tracker") {
                             Button(onClick = {
                                 goalsDraft = uiState.goals
@@ -277,13 +296,85 @@ fun NutritionScreen(
                                 onFetchMenu = onFetchMenu
                             )
                         } else if (selectedMealTime == null) {
-                            val mealTimes = uiState.menu.filter { it.category == selectedLocation.name }.map { it.mealTime }.distinct()
-                            MealTimeGrid(mealTimes = mealTimes, onMealTimeSelected = { selectedMealTime = it })
+                            val mealTimes = uiState.menu
+                                .filter { it.category == selectedLocation.name || it.station == selectedLocation.name }
+                                .map { it.mealTime }
+                                .distinct()
+                                .sorted()
+                            
+                            if (mealTimes.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Fastfood,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "No meal times available",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            "Try fetching the menu first",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            } else {
+                                MealTimeGrid(mealTimes = mealTimes, onMealTimeSelected = { selectedMealTime = it })
+                            }
                         } else if (selectedStationName == null) {
-                            val stations = uiState.menu.filter { it.category == selectedLocation.name && it.mealTime == selectedMealTime }.groupBy { it.station }.map { Category(it.key, it.value) }
-                            StationGrid(stations = stations, onStationSelected = { selectedStationName = it.name })
+                            val stations = uiState.menu
+                                .filter { 
+                                    (it.category == selectedLocation.name || it.station == selectedLocation.name) && 
+                                    it.mealTime == selectedMealTime 
+                                }
+                                .groupBy { it.station }
+                                .map { Category(it.key, it.value) }
+                            
+                            if (stations.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Fastfood,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "No stations available",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            } else {
+                                StationGrid(stations = stations, onStationSelected = { selectedStationName = it.name })
+                            }
                         } else {
-                            val category = Category(selectedStationName!!, uiState.menu.filter { it.station == selectedStationName!! })
+                            val category = Category(
+                                selectedStationName!!,
+                                uiState.menu.filter { it.station == selectedStationName!! }
+                            )
                             CategoryScreen(
                                 category = category, 
                                 onAddMeals = onAddMeals, 
@@ -371,39 +462,130 @@ fun LocationGrid(
     onLocationSelected: (Location) -> Unit,
     onFetchMenu: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Fetch menu button
-        Button(
-            onClick = onFetchMenu,
-            enabled = !uiState.isFetchingMenu,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            if (uiState.isFetchingMenu) {
-                Text("Fetching Menu...")
-            } else {
-                Text("Fetch Menu from Web")
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fetch menu button with loading state
+            Button(
+                onClick = onFetchMenu,
+                enabled = !uiState.isFetchingMenu,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                if (uiState.isFetchingMenu) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fetching Menu...")
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fetch Menu from Web")
+                }
             }
-        }
-        
-        // Show menu count if available
-        if (uiState.menu.isNotEmpty()) {
-            Text(
-                text = "Menu items: ${uiState.menu.size}",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-        
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(uiState.locations) { location ->
-                LocationCard(location = location, onLocationSelected = onLocationSelected)
+            
+            // Show menu status
+            when {
+                uiState.isFetchingMenu -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(8.dp))
+                            Text("Loading menu items...", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                uiState.menu.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Fastfood,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "No menu items loaded",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Tap 'Fetch Menu from Web' to load today's menu",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    // Show menu count and stats
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "${uiState.menu.size} Menu Items",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${uiState.categories.size} Categories",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Outlined.SetMeal,
+                                contentDescription = null,
+                                tint = PrimaryGreen
+                            )
+                        }
+                    }
+                }
+            }
+            
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(uiState.locations) { location ->
+                    LocationCard(location = location, onLocationSelected = onLocationSelected)
+                }
             }
         }
     }
@@ -491,22 +673,47 @@ fun StationCard(station: Category, onStationSelected: (Category) -> Unit) {
             .clickable { onStationSelected(station) }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(station.items.first().imageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = station.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-            )
+            // Only show image if items exist and have imageUrl
+            val imageUrl = station.items.firstOrNull()?.imageUrl
+            if (imageUrl != null && imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = station.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
+            } else {
+                // Show colored background if no image
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        .background(PrimaryGreen.copy(alpha = 0.2f))
+                )
+            }
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text(station.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        station.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (imageUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (station.items.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${station.items.size} items",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (imageUrl != null) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -518,13 +725,53 @@ fun CategoryScreen(
     onAddMeals: (List<MealEntry>) -> Unit,
     onMealClicked: (MealEntry) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(category.items) { meal ->
-            MenuItem(meal = meal, onMealClicked = onMealClicked)
+    if (category.items.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Fastfood,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "No items in this category",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Try fetching the menu from the main screen",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    text = "${category.items.size} items",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            items(category.items) { meal ->
+                MenuItem(meal = meal, onMealClicked = onMealClicked)
+            }
         }
     }
 }
@@ -545,14 +792,46 @@ fun MenuItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(meal.name, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(4.dp))
-                Row {
-                    meal.dietaryInfo.forEach { 
-                        Icon(painter = painterResource(id = it.icon), contentDescription = it.name, modifier = Modifier.size(20.dp).padding(end = 4.dp)) 
+                Text(
+                    text = meal.name,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                if (meal.calories > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "${meal.calories.toInt()} kcal",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                if (meal.station.isNotBlank() && meal.station != meal.category) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = meal.station,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                if (meal.dietaryInfo.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        meal.dietaryInfo.forEach { 
+                            Icon(
+                                painter = painterResource(id = it.icon),
+                                contentDescription = it.name,
+                                modifier = Modifier.size(20.dp).padding(end = 4.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            ) 
+                        }
                     }
                 }
             }
+            Icon(
+                imageVector = Icons.Outlined.Fastfood,
+                contentDescription = "View details",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
         }
     }
 }

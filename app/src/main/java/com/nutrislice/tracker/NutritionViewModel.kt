@@ -82,6 +82,8 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
     init {
         viewModelScope.launch {
             checkStreakOnAppStart()
+            // Optionally auto-fetch menu on app start (uncomment if desired)
+            // fetchMenuFromWeb()
         }
     }
 

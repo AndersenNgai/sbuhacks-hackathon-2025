@@ -7,6 +7,11 @@ import com.nutrislice.tracker.model.ScrapedMenuItem
 import com.nutrislice.tracker.model.ScrapedMenuData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -22,55 +27,37 @@ class MenuScraper {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+    
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
     /**
      * Scrapes food categories and items from the Nutrislice menu page
+     * Nutrislice uses JavaScript to load content, so we try to use their API first
      */
     suspend fun scrapeMenu(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<ScrapedMenuData> {
         return withContext(Dispatchers.IO) {
             try {
-                // Fetch the HTML content
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-                    .header("Accept-Language", "en-US,en;q=0.5")
-                    .header("Accept-Encoding", "gzip, deflate, br")
-                    .header("Connection", "keep-alive")
-                    .header("Upgrade-Insecure-Requests", "1")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        Exception("Failed to fetch menu: ${response.code}")
-                    )
+                // First, try to use Nutrislice API directly
+                val apiResult = tryNutrisliceApi()
+                if (apiResult != null) {
+                    return@withContext apiResult
                 }
 
-                val html = response.body?.string() ?: return@withContext Result.failure(
-                    Exception("Empty response body")
-                )
-
-                // Try to extract JSON data from script tags (Nutrislice often uses JSON)
-                val jsonData = extractJsonData(html)
-                if (jsonData != null) {
-                    return@withContext jsonData
+                // Fallback: Try to extract API endpoint from HTML
+                val html = fetchHtml(url)
+                val extractedApiResult = extractAndCallApi(html)
+                if (extractedApiResult != null) {
+                    return@withContext extractedApiResult
                 }
 
-                // Try to find Nutrislice API endpoints or embedded data
-                val apiData = extractNutrisliceApiData(html)
-                if (apiData != null) {
-                    return@withContext apiData
-                }
-
-                // Parse the HTML
+                // Last resort: Try HTML parsing (may not work if content is JS-loaded)
                 val doc = Jsoup.parse(html)
-
-                // Extract categories and items
                 val categories = extractCategories(doc)
                 val items = extractMenuItems(doc, categories)
 
-                // If still no items, try more aggressive extraction
                 val finalItems = if (items.isEmpty()) {
                     extractMenuItemsAggressive(doc)
                 } else {
@@ -87,6 +74,257 @@ class MenuScraper {
                 Result.failure(Exception("Scraping error: ${e.message}", e))
             }
         }
+    }
+
+    /**
+     * Tries to use Nutrislice API directly
+     * API format: https://{school}.api.nutrislice.com/menu/api/weeks/school/{school}/menu-type/{type}/{year}/{month}/{day}/
+     */
+    private suspend fun tryNutrisliceApi(): Result<ScrapedMenuData>? {
+        return try {
+            // Get today's date
+            val calendar = java.util.Calendar.getInstance()
+            val year = calendar.get(java.util.Calendar.YEAR)
+            val month = calendar.get(java.util.Calendar.MONTH) + 1 // Calendar months are 0-indexed
+            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
+
+            // Try different API endpoints
+            val apiEndpoints = listOf(
+                "https://stonybrook.api.nutrislice.com/menu/api/weeks/school/stonybrook/menu-type/lunch/$year/$month/$day/",
+                "https://stonybrook.api.nutrislice.com/menu/api/weeks/school/east-side-dining/menu-type/lunch/$year/$month/$day/",
+                "https://api.nutrislice.com/menu/api/weeks/school/stonybrook/menu-type/lunch/$year/$month/$day/",
+                // Try breakfast and dinner too
+                "https://stonybrook.api.nutrislice.com/menu/api/weeks/school/stonybrook/menu-type/breakfast/$year/$month/$day/",
+                "https://stonybrook.api.nutrislice.com/menu/api/weeks/school/stonybrook/menu-type/dinner/$year/$month/$day/"
+            )
+
+            for (apiUrl in apiEndpoints) {
+                try {
+                    val request = Request.Builder()
+                        .url(apiUrl)
+                        .header("User-Agent", "Mozilla/5.0")
+                        .header("Accept", "application/json")
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val json = response.body?.string()
+                        if (json != null && json.isNotBlank()) {
+                            return parseNutrisliceApiResponse(json)
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Try next endpoint
+                    continue
+                }
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Parses Nutrislice API JSON response
+     */
+    private fun parseNutrisliceApiResponse(jsonString: String): Result<ScrapedMenuData>? {
+        return try {
+            val jsonElement = json.parseToJsonElement(jsonString)
+            val items = mutableListOf<ScrapedMenuItem>()
+            val categories = mutableSetOf<String>()
+            var itemIndex = 0
+
+            // Try to parse the JSON structure
+            // Nutrislice API typically has: days -> sections -> menu_items
+            when {
+                jsonElement is JsonObject -> {
+                    // Try different JSON structures
+                    parseJsonObject(jsonElement, items, categories, itemIndex)
+                }
+                else -> {
+                    // Fallback to regex parsing if structure is unknown
+                    parseJsonWithRegex(jsonString, items, categories, itemIndex)
+                }
+            }
+
+            if (items.isNotEmpty()) {
+                Result.success(
+                    ScrapedMenuData(
+                        categories = categories.map { FoodCategory("cat_${it.hashCode()}", it, it) },
+                        items = items
+                    )
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            // Fallback to regex parsing
+            try {
+                parseJsonWithRegex(jsonString, mutableListOf(), mutableSetOf(), 0)
+            } catch (ex: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Parses JSON object structure
+     */
+    private fun parseJsonObject(
+        jsonObj: JsonObject,
+        items: MutableList<ScrapedMenuItem>,
+        categories: MutableSet<String>,
+        startIndex: Int
+    ): Int {
+        var itemIndex = startIndex
+
+        // Look for days array
+        jsonObj["days"]?.jsonArray?.forEach { day ->
+            day.jsonObject["sections"]?.jsonArray?.forEach { section ->
+                val sectionName = section.jsonObject["name"]?.jsonPrimitive?.content ?: "Uncategorized"
+                categories.add(sectionName)
+
+                section.jsonObject["menu_items"]?.jsonArray?.forEach { item ->
+                    val name = item.jsonObject["name"]?.jsonPrimitive?.content
+                    if (name != null && name.isNotBlank() && name.length > 2) {
+                        val station = item.jsonObject["station_name"]?.jsonPrimitive?.content ?: sectionName
+                        items.add(
+                            ScrapedMenuItem(
+                                id = "item_${itemIndex++}",
+                                name = name,
+                                category = sectionName,
+                                station = station
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // Also try direct menu_items array
+        jsonObj["menu_items"]?.jsonArray?.forEach { item ->
+            val name = item.jsonObject["name"]?.jsonPrimitive?.content
+            if (name != null && name.isNotBlank() && name.length > 2) {
+                val category = item.jsonObject["section_name"]?.jsonPrimitive?.content ?: "Uncategorized"
+                val station = item.jsonObject["station_name"]?.jsonPrimitive?.content ?: category
+                categories.add(category)
+                items.add(
+                    ScrapedMenuItem(
+                        id = "item_${itemIndex++}",
+                        name = name,
+                        category = category,
+                        station = station
+                    )
+                )
+            }
+        }
+
+        return itemIndex
+    }
+
+    /**
+     * Fallback: Parse JSON using regex (for unknown structures)
+     */
+    private fun parseJsonWithRegex(
+        jsonString: String,
+        items: MutableList<ScrapedMenuItem>,
+        categories: MutableSet<String>,
+        startIndex: Int
+    ): Result<ScrapedMenuData>? {
+        var itemIndex = startIndex
+
+        // Extract items using regex
+        val itemPattern = Regex(""""name"\s*:\s*"([^"]+)"""")
+        val categoryPattern = Regex(""""section_name"\s*:\s*"([^"]+)"""")
+        val stationPattern = Regex(""""station_name"\s*:\s*"([^"]+)"""")
+
+        val nameMatches = itemPattern.findAll(jsonString)
+        val categoryMatches = categoryPattern.findAll(jsonString)
+        val stationMatches = stationPattern.findAll(jsonString)
+
+        val names = nameMatches.map { it.groupValues[1] }.toList()
+        val cats = categoryMatches.map { it.groupValues[1] }.toList()
+        val stations = stationMatches.map { it.groupValues[1] }.toList()
+
+        // Create menu items
+        names.forEachIndexed { index, name ->
+            if (name.length > 2 && !name.contains("null") && !name.contains("undefined")) {
+                val category = cats.getOrNull(index) ?: "Uncategorized"
+                val station = stations.getOrNull(index) ?: category
+                categories.add(category)
+
+                items.add(
+                    ScrapedMenuItem(
+                        id = "item_${itemIndex++}",
+                        name = name,
+                        category = category,
+                        station = station
+                    )
+                )
+            }
+        }
+
+        return if (items.isNotEmpty()) {
+            Result.success(
+                ScrapedMenuData(
+                    categories = categories.map { FoodCategory("cat_${it.hashCode()}", it, it) },
+                    items = items
+                )
+            )
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Fetches HTML from URL
+     */
+    private fun fetchHtml(url: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .build()
+
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw Exception("Failed to fetch HTML: ${response.code}")
+        }
+
+        return response.body?.string() ?: throw Exception("Empty response body")
+    }
+
+    /**
+     * Extracts API endpoint from HTML and calls it
+     */
+    private suspend fun extractAndCallApi(html: String): Result<ScrapedMenuData>? {
+        // Look for API endpoints in script tags
+        val apiPattern = Regex("""https?://[^"'\s]*api\.nutrislice[^"'\s]+""")
+        val matches = apiPattern.findAll(html)
+        
+        for (match in matches) {
+            val apiUrl = match.value
+            try {
+                val request = Request.Builder()
+                    .url(apiUrl)
+                    .header("Accept", "application/json")
+                    .build()
+                
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val json = response.body?.string()
+                    if (json != null) {
+                        val result = parseNutrisliceApiResponse(json)
+                        if (result != null) {
+                            return result
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                continue
+            }
+        }
+        return null
     }
 
     /**
