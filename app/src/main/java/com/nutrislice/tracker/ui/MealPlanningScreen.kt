@@ -4,7 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Fastfood
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,7 +66,7 @@ fun MealPlanningScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.CalendarMonth,
+                        imageVector = Icons.Outlined.CalendarToday,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -84,7 +89,7 @@ fun MealPlanningScreen(
                     value = days.toString(),
                     onValueChange = { days = it.toIntOrNull() ?: 7 },
                     label = { Text("Number of Days") },
-                    leadingIcon = { Icon(Icons.Outlined.Event, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.CalendarToday, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -95,7 +100,7 @@ fun MealPlanningScreen(
                     value = preferences,
                     onValueChange = { preferences = it },
                     label = { Text("Additional Preferences (optional)") },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
@@ -116,7 +121,7 @@ fun MealPlanningScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Generating...")
                     } else {
-                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                        Icon(Icons.Outlined.Star, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Generate Meal Plan")
                     }
@@ -172,7 +177,7 @@ fun MealPlanningScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Restaurant,
+                        imageVector = Icons.Outlined.Fastfood,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -211,7 +216,7 @@ fun MealPlanningScreen(
                     value = mealTimePreferences,
                     onValueChange = { mealTimePreferences = it },
                     label = { Text("Preferences (optional)") },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
@@ -232,7 +237,7 @@ fun MealPlanningScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Generating...")
                     } else {
-                        Icon(Icons.Outlined.Lightbulb, contentDescription = null)
+                        Icon(Icons.Outlined.Star, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Get $selectedMealTime Suggestions")
                     }

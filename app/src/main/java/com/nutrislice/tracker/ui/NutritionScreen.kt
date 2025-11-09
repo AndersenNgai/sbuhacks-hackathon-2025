@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SetMeal
 import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -208,7 +209,7 @@ fun NutritionScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Outlined.AddCircle, contentDescription = null) },
+                    icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                     label = { Text("Add from Screenshot") },
                     selected = selectedScreen == "Manual Entry",
                     onClick = { 

@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import com.nutrislice.tracker.data.ScreenshotDataProcessor
 
 interface NutritionRepository {
     val goals: Flow<NutritionGoals>
@@ -323,7 +324,7 @@ class DataStoreNutritionRepository(
      * Loads menu items extracted from screenshots
      * Call this to populate the menu with screenshot data
      */
-    suspend fun loadScreenshotMenuItems(): Result<List<MealEntry>> {
+    override suspend fun loadScreenshotMenuItems(): Result<List<MealEntry>> {
         return withContext(ioDispatcher) {
             try {
                 val items = ScreenshotDataProcessor.extractedMenuItems

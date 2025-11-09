@@ -4,7 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Fastfood
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -96,7 +102,7 @@ fun ManualDataEntryScreen(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Item Name *") },
-                    leadingIcon = { Icon(Icons.Outlined.Restaurant, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.Fastfood, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -161,7 +167,7 @@ fun ManualDataEntryScreen(
                     value = servingSize,
                     onValueChange = { servingSize = it },
                     label = { Text("Serving Size") },
-                    leadingIcon = { Icon(Icons.Outlined.Scale, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -390,7 +396,8 @@ fun ManualDataEntryScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         ) {
             Row(
@@ -447,7 +454,7 @@ fun ManualDataEntryScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+            Icon(Icons.Outlined.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Quick Fill: Scrambled Eggs Example")
         }
