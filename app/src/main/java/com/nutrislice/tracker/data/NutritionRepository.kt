@@ -9,10 +9,12 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nutrislice.tracker.model.DefaultGoals
 import com.nutrislice.tracker.model.DietaryInfo
+import com.nutrislice.tracker.model.FoodCategory
 import com.nutrislice.tracker.model.MealEntry
 import com.nutrislice.tracker.model.Location
 import com.nutrislice.tracker.model.NutritionFacts
 import com.nutrislice.tracker.model.NutritionGoals
+import com.nutrislice.tracker.model.ScrapedMenuItem
 import com.nutrislice.tracker.model.UserProfile
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,8 @@ interface NutritionRepository {
     suspend fun updateStreak(streak: Int, lastDay: Long)
     suspend fun saveUserProfile(userProfile: UserProfile)
     fun getMenu(): Flow<List<MealEntry>>
+    suspend fun fetchMenuFromWeb(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<MealEntry>>
+    suspend fun fetchCategories(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining"): Result<List<FoodCategory>>
     fun getLocations(): Flow<List<Location>>
 }
 
@@ -47,7 +51,8 @@ class DataStoreNutritionRepository(
         ignoreUnknownKeys = true
         encodeDefaults = true
     },
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val menuScraper: MenuScraper = MenuScraper()
 ) : NutritionRepository {
 
     private object Keys {
@@ -160,199 +165,83 @@ class DataStoreNutritionRepository(
     }
 
     override fun getMenu(): Flow<List<MealEntry>> {
-        return flowOf(
-            listOf(
-                MealEntry(
-                    id = 1, 
-                    name = "Pancakes", 
-                    calories = 550.0, 
-                    protein = 30.0, 
-                    carbs = 45.0, 
-                    fat = 25.0, 
-                    fiber = 3.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Breakfast", 
-                    station = "Dine-In - Self Serve Pancakes and Waffles",
-                    imageUrl = "https://www.inspiredtaste.net/wp-content/uploads/2016/07/Pancake-Recipe-1-1200.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 pancake",
-                        calories = 140,
-                        totalFat = "1g",
-                        saturatedFat = "0g",
-                        transFat = "0g",
-                        cholesterol = "0mg",
-                        sodium = "480mg",
-                        totalCarbohydrate = "30g",
-                        dietaryFiber = "1g",
-                        totalSugars = "2g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Enriched Bleached Flour", "Sugar", "Leavening", "Salt", "Soybean Oil", "Buttermilk", "Eggs", "Water")
-                ),
-                MealEntry(
-                    id = 2, 
-                    name = "Waffles", 
-                    calories = 450.0, 
-                    protein = 35.0, 
-                    carbs = 40.0, 
-                    fat = 20.0, 
-                    fiber = 2.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Breakfast", 
-                    station = "Dine-In - Self Serve Pancakes and Waffles",
-                    imageUrl = "https://www.allrecipes.com/thmb/mvO20-S-u8dC-5-i7h-4-5Q8Yk=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/20513-classic-waffles-mfs-036-4x3-8103a3068f934b49b9968a1854a8a071.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 waffle",
-                        calories = 140,
-                        totalFat = "1g",
-                        saturatedFat = "0g",
-                        transFat = "0g",
-                        cholesterol = "0mg",
-                        sodium = "480mg",
-                        totalCarbohydrate = "30g",
-                        dietaryFiber = "1g",
-                        totalSugars = "2g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Enriched Bleached Flour", "Sugar", "Leavening", "Salt", "Soybean Oil", "Buttermilk", "Eggs", "Water")
-                ),
-                MealEntry(
-                    id = 3, 
-                    name = "Yogurt", 
-                    calories = 350.0, 
-                    protein = 5.0, 
-                    carbs = 50.0, 
-                    fat = 15.0, 
-                    fiber = 4.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Breakfast", 
-                    station = "Yogurt & Fruit Bar",
-                    imageUrl = "https://www.alphafoodie.com/wp-content/uploads/2021/04/Yogurt-fruit-parfait-1-of-1-500x500.jpeg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 cup",
-                        calories = 350,
-                        totalFat = "15g",
-                        saturatedFat = "8g",
-                        transFat = "0g",
-                        cholesterol = "50mg",
-                        sodium = "100mg",
-                        totalCarbohydrate = "50g",
-                        dietaryFiber = "4g",
-                        totalSugars = "45g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Yogurt (Milk, Cream, Pectin, Carrageenan)", "Granola (Oats, Brown Sugar, Coconut Oil, Salt)", "Strawberries", "Blueberries")
-                ),
-                MealEntry(
-                    id = 4, 
-                    name = "Pizza", 
-                    calories = 600.0, 
-                    protein = 25.0, 
-                    carbs = 60.0, 
-                    fat = 30.0, 
-                    fiber = 5.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Lunch", 
-                    station = "Pizza Station",
-                    imageUrl = "https://www.stonybrook.edu/commcms/fsa/images/pizza-hero.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 slice",
-                        calories = 600,
-                        totalFat = "30g",
-                        saturatedFat = "15g",
-                        transFat = "0g",
-                        cholesterol = "70mg",
-                        sodium = "1200mg",
-                        totalCarbohydrate = "60g",
-                        dietaryFiber = "5g",
-                        totalSugars = "5g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Dough (Enriched Flour, Water, Yeast, Sugar, Salt, Olive Oil)", "Tomato Sauce (Tomatoes, Salt, Spices)", "Cheese (Milk, Salt, Enzymes)", "Pepperoni (Pork, Salt, Spices)")
-                ),
-                 MealEntry(
-                    id = 5, 
-                    name = "Omelet", 
-                    calories = 300.0, 
-                    protein = 20.0, 
-                    carbs = 2.0, 
-                    fat = 22.0, 
-                    fiber = 1.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Breakfast", 
-                    station = "Omelet Bar",
-                    imageUrl = "https://www.incredibleegg.org/wp-content/uploads/2019/02/basic-french-omelet-930x550.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 omelet",
-                        calories = 300,
-                        totalFat = "22g",
-                        saturatedFat = "8g",
-                        transFat = "0g",
-                        cholesterol = "400mg",
-                        sodium = "300mg",
-                        totalCarbohydrate = "2g",
-                        dietaryFiber = "1g",
-                        totalSugars = "1g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Eggs", "Cheese (Milk, Salt, Enzymes)", "Spinach", "Mushrooms", "Onions")
-                ),
-                 MealEntry(
-                    id = 6, 
-                    name = "Deli Sandwich", 
-                    calories = 500.0, 
-                    protein = 25.0, 
-                    carbs = 50.0, 
-                    fat = 20.0, 
-                    fiber = 5.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Lunch", 
-                    station = "Deli",
-                    imageUrl = "https://www.stonybrook.edu/commcms/fsa/images/deli-hero.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 sandwich",
-                        calories = 500,
-                        totalFat = "20g",
-                        saturatedFat = "8g",
-                        transFat = "0g",
-                        cholesterol = "60mg",
-                        sodium = "1000mg",
-                        totalCarbohydrate = "50g",
-                        dietaryFiber = "5g",
-                        totalSugars = "5g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Bread (Enriched Flour, Water, Yeast, Sugar, Salt, Olive Oil)", "Turkey", "Cheese (Milk, Salt, Enzymes)", "Lettuce", "Tomato", "Mayonnaise")
-                ),
-                 MealEntry(
-                    id = 7, 
-                    name = "Cheesecake", 
-                    calories = 400.0, 
-                    protein = 5.0, 
-                    carbs = 35.0, 
-                    fat = 25.0, 
-                    fiber = 1.0, 
-                    category = "East Side Dining", 
-                    mealTime = "Dinner", 
-                    station = "Dessert",
-                    imageUrl = "https://www.stonybrook.edu/commcms/fsa/images/dessert-hero.jpg",
-                    nutritionFacts = NutritionFacts(
-                        servingSize = "1 slice",
-                        calories = 400,
-                        totalFat = "25g",
-                        saturatedFat = "15g",
-                        transFat = "0g",
-                        cholesterol = "80mg",
-                        sodium = "300mg",
-                        totalCarbohydrate = "35g",
-                        dietaryFiber = "1g",
-                        totalSugars = "25g"
-                    ),
-                    dietaryInfo = listOf(DietaryInfo.CONTAINS_DAIRY, DietaryInfo.CONTAINS_EGG, DietaryInfo.VEGETARIAN),
-                    ingredients = listOf("Cream Cheese", "Sugar", "Eggs", "Graham Cracker Crust")
-                )
-            )
+        // Return cached menu or fetch from web
+        // For now, return empty list - use fetchMenuFromWeb() to get actual data
+        return flowOf(emptyList())
+    }
+
+    override suspend fun fetchMenuFromWeb(url: String): Result<List<MealEntry>> {
+        return withContext(ioDispatcher) {
+            menuScraper.scrapeMenu(url).map { scrapedData ->
+                scrapedData.items.map { scrapedItem ->
+                    convertToMealEntry(scrapedItem)
+                }
+            }
+        }
+    }
+
+    override suspend fun fetchCategories(url: String): Result<List<FoodCategory>> {
+        return withContext(ioDispatcher) {
+            menuScraper.scrapeMenu(url).map { scrapedData ->
+                scrapedData.categories
+            }
+        }
+    }
+
+    /**
+     * Converts a ScrapedMenuItem to a MealEntry
+     */
+    private fun convertToMealEntry(scrapedItem: ScrapedMenuItem): MealEntry {
+        val nutritionFacts = scrapedItem.nutritionFacts
+        val calories = nutritionFacts?.calories?.toDouble() ?: 0.0
+        
+        // Extract numeric values from nutrition facts strings
+        // Note: Protein is not directly available in NutritionFacts, will need to be extracted from other sources
+        val protein = 0.0 // Protein info may not be available in scraped data
+        val carbs = extractNumericValue(nutritionFacts?.totalCarbohydrate) ?: 0.0
+        val fat = extractNumericValue(nutritionFacts?.totalFat) ?: 0.0
+        val fiber = extractNumericValue(nutritionFacts?.dietaryFiber) ?: 0.0
+
+        return MealEntry(
+            id = scrapedItem.id.hashCode().toLong(),
+            name = scrapedItem.name,
+            calories = calories,
+            protein = protein,
+            carbs = carbs,
+            fat = fat,
+            fiber = fiber,
+            category = scrapedItem.category,
+            mealTime = scrapedItem.mealTime ?: determineMealTime(scrapedItem.category),
+            station = scrapedItem.station ?: scrapedItem.category,
+            imageUrl = scrapedItem.imageUrl,
+            nutritionFacts = nutritionFacts,
+            dietaryInfo = scrapedItem.dietaryInfo,
+            ingredients = scrapedItem.ingredients
         )
+    }
+
+    /**
+     * Extracts numeric value from a string like "25g" or "100mg"
+     */
+    private fun extractNumericValue(value: String?): Double? {
+        if (value == null) return null
+        val numericPart = value.replace(Regex("[^0-9.]"), "")
+        return numericPart.toDoubleOrNull()
+    }
+
+    /**
+     * Determines meal time based on category name
+     */
+    private fun determineMealTime(category: String): String {
+        val lowerCategory = category.lowercase()
+        return when {
+            lowerCategory.contains("breakfast") -> "Breakfast"
+            lowerCategory.contains("lunch") -> "Lunch"
+            lowerCategory.contains("dinner") -> "Dinner"
+            lowerCategory.contains("dessert") -> "Dessert"
+            lowerCategory.contains("snack") -> "Snack"
+            else -> "All Day"
+        }
     }
 
     override fun getLocations(): Flow<List<Location>> {

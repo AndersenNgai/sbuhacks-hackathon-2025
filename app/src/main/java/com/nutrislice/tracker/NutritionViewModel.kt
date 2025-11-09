@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.nutrislice.tracker.data.NutritionRepository
+import com.nutrislice.tracker.model.FoodCategory
 import com.nutrislice.tracker.model.MealEntry
 import com.nutrislice.tracker.model.MealInput
 import com.nutrislice.tracker.model.Location
@@ -26,13 +27,17 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         val meals: List<MealEntry> = emptyList(),
         val streak: Int = 0,
         val menu: List<MealEntry> = emptyList(),
+        val categories: List<FoodCategory> = emptyList(),
         val locations: List<Location> = emptyList(),
         val userProfile: UserProfile = UserProfile(),
         val isLoading: Boolean = true,
+        val isFetchingMenu: Boolean = false,
         val userMessage: String? = null
     )
 
     private val userMessage = MutableStateFlow<String?>(null)
+    private val isFetchingMenu = MutableStateFlow(false)
+    private val categories = MutableStateFlow<List<FoodCategory>>(emptyList())
 
     val uiState: StateFlow<NutritionUiState> = combine(
         repository.goals,
@@ -41,7 +46,9 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         repository.getMenu(),
         repository.getLocations(),
         repository.userProfile,
-        userMessage
+        userMessage,
+        isFetchingMenu,
+        categories
     ) { flows ->
         val goals = flows[0] as NutritionGoals
         val allMeals = flows[1] as List<MealEntry>
@@ -50,6 +57,8 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         val locations = flows[4] as List<Location>
         val userProfile = flows[5] as UserProfile
         val message = flows[6] as String?
+        val fetching = flows[7] as Boolean
+        val cats = flows[8] as List<FoodCategory>
 
         val todaysMeals = allMeals.filter { isToday(it.timestamp) }
         NutritionUiState(
@@ -57,9 +66,11 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
             meals = todaysMeals,
             streak = streak,
             menu = menu,
+            categories = cats,
             locations = locations,
             userProfile = userProfile,
             isLoading = false,
+            isFetchingMenu = fetching,
             userMessage = message
         )
     }.stateIn(
@@ -150,6 +161,44 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
 
     fun consumeMessage() {
         userMessage.value = null
+    }
+
+    /**
+     * Fetches menu items from the web using the scraper
+     */
+    fun fetchMenuFromWeb(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining") {
+        viewModelScope.launch {
+            isFetchingMenu.value = true
+            userMessage.value = null
+            
+            repository.fetchMenuFromWeb(url).onSuccess { menuItems ->
+                userMessage.value = "Fetched ${menuItems.size} menu items"
+                // Optionally add fetched items to the menu or save them
+            }.onFailure { error ->
+                userMessage.value = "Error fetching menu: ${error.message}"
+            }
+            
+            isFetchingMenu.value = false
+        }
+    }
+
+    /**
+     * Fetches food categories from the web using the scraper
+     */
+    fun fetchCategories(url: String = "https://stonybrook.nutrislice.com/menu/east-side-dining") {
+        viewModelScope.launch {
+            isFetchingMenu.value = true
+            userMessage.value = null
+            
+            repository.fetchCategories(url).onSuccess { cats ->
+                categories.value = cats
+                userMessage.value = "Fetched ${cats.size} categories"
+            }.onFailure { error ->
+                userMessage.value = "Error fetching categories: ${error.message}"
+            }
+            
+            isFetchingMenu.value = false
+        }
     }
 
     private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
