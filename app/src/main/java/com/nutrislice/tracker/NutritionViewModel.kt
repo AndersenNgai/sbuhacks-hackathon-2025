@@ -291,6 +291,20 @@ class NutritionViewModel(private val repository: NutritionRepository) : ViewMode
         mealTimeSuggestion.value = null
     }
 
+    /**
+     * Loads menu items from screenshot data
+     */
+    fun loadScreenshotData() {
+        viewModelScope.launch {
+            userMessage.value = "Loading screenshot data..."
+            repository.loadScreenshotMenuItems().onSuccess { items ->
+                userMessage.value = "Loaded ${items.size} items from screenshots"
+            }.onFailure { error ->
+                userMessage.value = "Error loading screenshot data: ${error.message}"
+            }
+        }
+    }
+
     private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
         return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)

@@ -208,6 +208,18 @@ fun NutritionScreen(
                     }
                 )
                 NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.AddCircle, contentDescription = null) },
+                    label = { Text("Add from Screenshot") },
+                    selected = selectedScreen == "Manual Entry",
+                    onClick = { 
+                        scope.launch { drawerState.close() }
+                        selectedScreen = "Manual Entry"
+                        selectedLocationName = null
+                        selectedMealTime = null
+                        selectedStationName = null
+                    }
+                )
+                NavigationDrawerItem(
                     icon = { Icon(Icons.Outlined.ThumbUp, contentDescription = null) },
                     label = { Text("Meal Recommendation") },
                     selected = selectedScreen == "Meal Recommendation",
@@ -410,6 +422,12 @@ fun NutritionScreen(
                     }
                     "Meal Recommendation" -> {
                         MealRecommendationScreen(uiState = uiState, onAddMeals = onAddMeals, onMealClicked = { showNutritionFacts = it })
+                    }
+                    "Manual Entry" -> {
+                        ManualDataEntryScreen(
+                            onSaveMeal = { meal -> onAddMeals(listOf(meal)) },
+                            onDismiss = { selectedScreen = "All Locations" }
+                        )
                     }
                 }
             }

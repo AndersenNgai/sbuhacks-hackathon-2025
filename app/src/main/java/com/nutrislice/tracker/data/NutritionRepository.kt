@@ -52,6 +52,9 @@ interface NutritionRepository {
     // NeuralSeek meal planning
     suspend fun getMealPlanSuggestions(days: Int = 7, preferences: String = ""): Result<String>
     suspend fun getMealTimeSuggestions(mealTime: String, preferences: String = ""): Result<String>
+    
+    // Screenshot data loading
+    suspend fun loadScreenshotMenuItems(): Result<List<MealEntry>>
 }
 
 class DataStoreNutritionRepository(
@@ -313,6 +316,34 @@ class DataStoreNutritionRepository(
             val goals = goals.first()
             val profile = userProfile.first()
             neuralSeekService.getMealTimeSuggestions(mealTime, goals, profile, preferences)
+        }
+    }
+
+    /**
+     * Loads menu items extracted from screenshots
+     * Call this to populate the menu with screenshot data
+     */
+    suspend fun loadScreenshotMenuItems(): Result<List<MealEntry>> {
+        return withContext(ioDispatcher) {
+            try {
+                val items = ScreenshotDataProcessor.extractedMenuItems
+                if (items.isNotEmpty()) {
+                    // Add to menu
+                    _menuItems.value = items
+                    // Save to DataStore
+                    dataStore.edit { prefs ->
+                        prefs[Keys.Menu] = json.encodeToString(
+                            ListSerializer(MealEntry.serializer()),
+                            items
+                        )
+                    }
+                    Result.success(items)
+                } else {
+                    Result.failure(Exception("No screenshot data available"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
     }
 
