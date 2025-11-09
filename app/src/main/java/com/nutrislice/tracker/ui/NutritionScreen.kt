@@ -345,7 +345,8 @@ fun NutritionScreen(
                     "Menu Items" -> MenuItemsScreen(
                         menuItems = uiState.menu,
                         onAddMeals = onAddMeals,
-                        onMealClicked = { showNutritionFacts = it }
+                        onMealClicked = { showNutritionFacts = it },
+                        onReloadMenu = viewModel::loadScreenshotData
                     )
                     "All Locations" -> {
                         if (selectedLocation == null) {
@@ -799,7 +800,8 @@ fun StationCard(station: Category, onStationSelected: (Category) -> Unit) {
 fun MenuItemsScreen(
     menuItems: List<MealEntry>,
     onAddMeals: (List<MealEntry>) -> Unit,
-    onMealClicked: (MealEntry) -> Unit
+    onMealClicked: (MealEntry) -> Unit,
+    onReloadMenu: () -> Unit = {}
 ) {
     // Group menu items by meal time for easier browsing
     val itemsByMealTime = menuItems.groupBy { it.mealTime.ifBlank { "Other" } }
@@ -853,11 +855,26 @@ fun MenuItemsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "${menuItems.size} items",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${menuItems.size} items",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        IconButton(
+                            onClick = { onReloadMenu() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Reload menu items",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
             

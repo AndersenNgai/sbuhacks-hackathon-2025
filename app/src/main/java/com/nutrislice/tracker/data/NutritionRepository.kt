@@ -137,10 +137,8 @@ class DataStoreNutritionRepository(
                         _menuItems.value = savedMenu
                     }
                 }
-                // If menu is empty, automatically load screenshot items
-                if (_menuItems.value.isEmpty()) {
-                    loadScreenshotMenuItems()
-                }
+                // Always try to add screenshot items (will skip duplicates)
+                loadScreenshotMenuItems()
             } ?: run {
                 // No saved menu, load screenshot items
                 loadScreenshotMenuItems()
